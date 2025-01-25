@@ -43,7 +43,8 @@
     "@web-academy/core-lib": "^1.0.3"
   },
   "peerDependencies": {
-    "aws-sdk": "^2.821.0"
+    "@aws-sdk/client-dynamodb": "^3.734.0",
+    "@aws-sdk/lib-dynamodb": "^3.734.0"
   },
   "release": {
     "repositoryUrl": "https://github.com/acady-io/acady-connector-dynamodb.git",

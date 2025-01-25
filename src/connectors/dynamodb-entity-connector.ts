@@ -1,23 +1,50 @@
-import * as AWS from 'aws-sdk';
-import {AWSError, DynamoDB} from 'aws-sdk';
-import {DocumentClient} from 'aws-sdk/lib/dynamodb/document_client';
-import {ArrayHelper, WaitHelper} from '@web-academy/core-lib';
-import AttributeMap = DocumentClient.AttributeMap;
-import BatchGetResponseMap = DocumentClient.BatchGetResponseMap;
-import QueryInput = DocumentClient.QueryInput;
-import KeyConditions = DocumentClient.KeyConditions;
-import FilterConditionMap = DocumentClient.FilterConditionMap;
-import UpdateItemInput = DocumentClient.UpdateItemInput;
-import ExpressionAttributeValueMap = DocumentClient.ExpressionAttributeValueMap;
+import { 
+  DynamoDBClient,
+  CreateTableCommand,
+  DeleteTableCommand,
+  DescribeTableCommand,
+  type CreateTableCommandInput,
+  type DeleteTableCommandInput,
+  type DescribeTableCommandInput,
+  type TableDescription
+} from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  BatchGetCommand,
+  GetCommand,
+  DeleteCommand,
+  PutCommand,
+  UpdateCommand,
+  ScanCommand,
+  QueryCommand,
+  BatchWriteCommand,
+  type UpdateCommandInput
+} from '@aws-sdk/lib-dynamodb';
+import { ArrayHelper, WaitHelper } from '@web-academy/core-lib';
+
+// Type definitions
+type AttributeMap = Record<string, any>;
+type BatchGetResponseMap = Record<string, AttributeMap[]>;
+type QueryInput = {
+  TableName: string;
+  KeyConditions?: Record<string, any>;
+  IndexName?: string;
+  QueryFilter?: Record<string, any>;
+  Limit?: number;
+  ExclusiveStartKey?: any;
+};
+type KeyConditions = Record<string, any>;
+type FilterConditionMap = Record<string, any>;
+type ExpressionAttributeValueMap = Record<string, any>;
 
 export class DynamodbEntityConnector {
   private static BATCH_SIZE = 25;
-  private client: DocumentClient;
+  private client: DynamoDBClient;
+  private documentClient: DynamoDBDocumentClient;
 
   protected readonly tableName: string;
   protected readonly partitionKey: string;
   protected readonly sortKey?: string;
-  private readonly managementClient: DynamoDB;
   public debug: boolean = false;
   private config: any;
 
@@ -33,7 +60,12 @@ export class DynamodbEntityConnector {
 
     this.config = config;
     this.client = this.buildClient();
-    this.managementClient = this.buildManagementClient();
+    this.documentClient = DynamoDBDocumentClient.from(this.client, {
+      marshallOptions: {
+        removeUndefinedValues: true,
+        convertEmptyValues: true
+      }
+    });
   }
 
   async batchGet(keys: any[]): Promise<AttributeMap[] | undefined> {
@@ -55,15 +87,16 @@ export class DynamodbEntityConnector {
     params: any,
     retry?: boolean
   ): Promise<BatchGetResponseMap | undefined> {
-    const self = this;
-    return new Promise((resolve, reject) => {
-      self.client.batchGet(params, function (err, data) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_batchGet', resolve, reject);
-        } else resolve(data.Responses);
+    try {
+      const command = new BatchGetCommand(params);
+      const data = await this.documentClient.send(command);
+      return data.Responses;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_batchGet', resolve, reject);
       });
-    });
+    }
   }
 
   async getItem(key: any, params?: any): Promise<AttributeMap | undefined> {
@@ -78,7 +111,6 @@ export class DynamodbEntityConnector {
     params: any,
     retry?: boolean
   ): Promise<AttributeMap | undefined> {
-    const self = this;
     if (this.debug) {
       console.log(
         'DynamodbEntityConnector._getItem',
@@ -86,14 +118,16 @@ export class DynamodbEntityConnector {
         JSON.stringify(params)
       );
     }
-    return new Promise((resolve, reject) => {
-      self.client.get(params, function (err, data) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_getItem', resolve, reject);
-        } else resolve(data.Item);
+    try {
+      const command = new GetCommand(params);
+      const data = await this.documentClient.send(command);
+      return data.Item;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_getItem', resolve, reject);
       });
-    });
+    }
   }
 
   async deleteItems(items: any[], params?: any) {
@@ -134,7 +168,6 @@ export class DynamodbEntityConnector {
   }
 
   private async _deleteItems(params: any, retry?: boolean) {
-    const self = this;
     if (this.debug) {
       console.log(
         'DynamodbEntityConnector._deleteItems',
@@ -143,14 +176,16 @@ export class DynamodbEntityConnector {
       );
     }
 
-    return new Promise((resolve, reject) => {
-      self.client.batchWrite(params, function (err) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_deleteItems', resolve, reject);
-        } else resolve(true);
+    try {
+      const command = new BatchWriteCommand(params);
+      await this.documentClient.send(command);
+      return true;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_deleteItems', resolve, reject);
       });
-    });
+    }
   }
 
   async deleteItem(key: any, params?: any) {
@@ -162,7 +197,6 @@ export class DynamodbEntityConnector {
   }
 
   private async _deleteItem(params: any, retry?: boolean) {
-    const self = this;
     if (this.debug) {
       console.log(
         'DynamodbEntityConnector._deleteItem',
@@ -170,14 +204,16 @@ export class DynamodbEntityConnector {
         JSON.stringify(params)
       );
     }
-    return new Promise((resolve, reject) => {
-      self.client.delete(params, function (err, data) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_deleteItem', resolve, reject);
-        } else resolve(data.Attributes);
+    try {
+      const command = new DeleteCommand(params);
+      const data = await this.documentClient.send(command);
+      return data.Attributes;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_deleteItem', resolve, reject);
       });
-    });
+    }
   }
 
   async storeItems(items: any[]) {
@@ -223,7 +259,6 @@ export class DynamodbEntityConnector {
   }
 
   private async _storeItems(params: any, retry?: boolean) {
-    const self = this;
     if (this.debug) {
       console.log(
         'DynamodbEntityConnector._storeItems',
@@ -232,14 +267,16 @@ export class DynamodbEntityConnector {
       );
     }
 
-    return new Promise((resolve, reject) => {
-      self.client.batchWrite(params, function (err) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_storeItems', resolve, reject);
-        } else resolve(true);
+    try {
+      const command = new BatchWriteCommand(params);
+      await this.documentClient.send(command);
+      return true;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_storeItems', resolve, reject);
       });
-    });
+    }
   }
 
   async updateItem(
@@ -257,10 +294,9 @@ export class DynamodbEntityConnector {
   }
 
   protected async _updateItem(
-    params: UpdateItemInput,
+    params: UpdateCommandInput,
     retry?: boolean
   ): Promise<AttributeMap | undefined> {
-    const self = this;
     if (this.debug) {
       console.log(
         'DynamodbEntityConnector._updateItem',
@@ -268,14 +304,16 @@ export class DynamodbEntityConnector {
         JSON.stringify(params)
       );
     }
-    return new Promise((resolve, reject) => {
-      self.client.update(params, function (err, data) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_updateItem', resolve, reject);
-        } else resolve(data.Attributes);
+    try {
+      const command = new UpdateCommand(params);
+      const data = await this.documentClient.send(command);
+      return data.Attributes;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_updateItem', resolve, reject);
       });
-    });
+    }
   }
 
   async storeItem(item: any, params?: any) {
@@ -289,7 +327,6 @@ export class DynamodbEntityConnector {
   }
 
   private async _storeItem(params: any, retry?: boolean) {
-    const self = this;
     if (this.debug) {
       console.log(
         'DynamodbEntityConnector._storeItem',
@@ -297,14 +334,16 @@ export class DynamodbEntityConnector {
         JSON.stringify(params)
       );
     }
-    return new Promise((resolve, reject) => {
-      self.client.put(params, function (err) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_storeItem', resolve, reject);
-        } else resolve(true);
+    try {
+      const command = new PutCommand(params);
+      await this.documentClient.send(command);
+      return true;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_storeItem', resolve, reject);
       });
-    });
+    }
   }
 
   async scan(
@@ -348,15 +387,16 @@ export class DynamodbEntityConnector {
   }
 
   private async _scan(params: any, retry?: boolean): Promise<any> {
-    const self = this;
-    return new Promise((resolve, reject) => {
-      self.client.scan(params, function (err, data) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_scan', resolve, reject);
-        } else resolve(data);
+    try {
+      const command = new ScanCommand(params);
+      const data = await this.documentClient.send(command);
+      return data;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_scan', resolve, reject);
       });
-    });
+    }
   }
 
   async query(
@@ -401,15 +441,16 @@ export class DynamodbEntityConnector {
   }
 
   private async _query(params: QueryInput, retry?: boolean): Promise<any> {
-    const self = this;
-    return new Promise((resolve, reject) => {
-      self.client.query(params, function (err, data) {
-        if (err) {
-          if (retry) reject(err);
-          else self._solveError(err, params, '_query', resolve, reject);
-        } else resolve(data);
+    try {
+      const command = new QueryCommand(params);
+      const data = await this.documentClient.send(command);
+      return data;
+    } catch (err) {
+      if (retry) throw err;
+      return new Promise((resolve, reject) => {
+        this._solveError(err, params, '_query', resolve, reject);
       });
-    });
+    }
   }
 
   private _cleanItem(item: any) {
@@ -467,14 +508,14 @@ export class DynamodbEntityConnector {
     });
   }
 
-  private async _createTable(params: DynamoDB.Types.CreateTableInput) {
-    const client = this.managementClient;
-    return new Promise((resolve, reject) => {
-      client.createTable(params, function (err, data) {
-        if (err) reject(err);
-        else resolve(data);
-      });
-    });
+  private async _createTable(params: CreateTableCommandInput) {
+    try {
+      const command = new CreateTableCommand(params);
+      const data = await this.client.send(command);
+      return data;
+    } catch (err) {
+      throw err;
+    }
   }
 
   async deleteTable() {
@@ -483,44 +524,44 @@ export class DynamodbEntityConnector {
     });
   }
 
-  private async _deleteTable(params: DynamoDB.Types.DeleteTableInput) {
-    const client = this.managementClient;
-    return new Promise((resolve, reject) => {
-      client.deleteTable(params, function (err, data) {
-        if (err) reject(err);
-        else resolve(data);
-      });
-    });
+  private async _deleteTable(params: DeleteTableCommandInput) {
+    try {
+      const command = new DeleteTableCommand(params);
+      const data = await this.client.send(command);
+      return data;
+    } catch (err) {
+      throw err;
+    }
   }
 
-  async describeTable(): Promise<DynamoDB.Types.TableDescription | undefined> {
+  async describeTable(): Promise<TableDescription | undefined> {
     return await this._describeTable({
       TableName: this.tableName,
     });
   }
 
   private async _describeTable(
-    params: DynamoDB.Types.DescribeTableInput
-  ): Promise<DynamoDB.Types.TableDescription | undefined> {
-    const client = this.managementClient;
-    return new Promise((resolve, reject) => {
-      client.describeTable(params, function (err, data) {
-        if (err) reject(err);
-        else resolve(data.Table);
-      });
-    });
+    params: DescribeTableCommandInput
+  ): Promise<TableDescription | undefined> {
+    try {
+      const command = new DescribeTableCommand(params);
+      const data = await this.client.send(command);
+      return data.Table;
+    } catch (err) {
+      throw err;
+    }
   }
 
   private async _solveError(
-    err: AWSError,
+    err: any,
     params: any,
     method: string,
-    resolve,
-    reject
+    resolve: (value: any) => void,
+    reject: (reason?: any) => void
   ) {
     try {
-      const code = err.code;
-      if (code === 'ResourceNotFoundException') {
+      const code = err.$metadata?.httpStatusCode === 404 || err.name === 'ResourceNotFoundException';
+      if (code) {
         await this.createTable();
         console.log('Created table ' + this.tableName);
         await WaitHelper.wait(2500);
@@ -562,12 +603,8 @@ export class DynamodbEntityConnector {
     }
   }
 
-  private buildClient(): DocumentClient {
-    return new AWS.DynamoDB.DocumentClient(this.buildConfig());
-  }
-
-  private buildManagementClient(): AWS.DynamoDB {
-    return new AWS.DynamoDB(this.buildConfig());
+  private buildClient(): DynamoDBClient {
+    return new DynamoDBClient(this.buildConfig());
   }
 
   private buildConfig() {
