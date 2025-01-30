@@ -1,26 +1,26 @@
-import { 
-  DynamoDBClient,
+import {
   CreateTableCommand,
-  DeleteTableCommand,
-  DescribeTableCommand,
   type CreateTableCommandInput,
+  DeleteTableCommand,
   type DeleteTableCommandInput,
+  DescribeTableCommand,
   type DescribeTableCommandInput,
+  DynamoDBClient,
   type TableDescription
 } from '@aws-sdk/client-dynamodb';
 import {
-  DynamoDBDocumentClient,
   BatchGetCommand,
-  GetCommand,
-  DeleteCommand,
-  PutCommand,
-  UpdateCommand,
-  ScanCommand,
-  QueryCommand,
   BatchWriteCommand,
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand,
+  UpdateCommand,
   type UpdateCommandInput
 } from '@aws-sdk/lib-dynamodb';
-import { ArrayHelper, WaitHelper } from '@web-academy/core-lib';
+import {ArrayHelper, WaitHelper} from '@web-academy/core-lib';
 
 // Type definitions
 type AttributeMap = Record<string, any>;
@@ -359,14 +359,14 @@ export class DynamodbEntityConnector {
       IndexName: indexName,
       ScanFilter: queryFilter,
       Limit: limit,
-      ExclusiveStartKey: null,
+      ExclusiveStartKey: undefined,
     };
 
     if (additionalParams) {
       params = Object.assign(params, additionalParams);
     }
 
-    let lastEvaluatedKey = null;
+    let lastEvaluatedKey = undefined;
 
     do {
       params.ExclusiveStartKey = lastEvaluatedKey;
@@ -379,7 +379,7 @@ export class DynamodbEntityConnector {
         items.push(item);
       });
     } while (
-      lastEvaluatedKey != null &&
+      lastEvaluatedKey &&
       (limit == undefined || items.length < limit)
     );
 
