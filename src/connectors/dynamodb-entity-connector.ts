@@ -241,19 +241,19 @@ export class DynamodbEntityConnector {
 
       await Promise.all(promises);
       if (this.debug)
-      console.log(
-        'Stored ' + items.length + ' in ' + promises.length + ' Promises'
-      );
+        console.log(
+          'Stored ' + items.length + ' in ' + promises.length + ' Promises'
+        );
     } catch (e: any) {
       console.log(
         'EXCEPTION in DynamodbEntityConnector.storeItems for table ' +
-          this.tableName,
+        this.tableName,
         e,
         e.stack
       );
       throw Error(
         'EXCEPTION in DynamodbEntityConnector.storeItems for table ' +
-          this.tableName
+        this.tableName
       );
     }
   }
@@ -381,7 +381,7 @@ export class DynamodbEntityConnector {
     } while (
       lastEvaluatedKey &&
       (limit == undefined || items.length < limit)
-    );
+      );
 
     return items;
   }
@@ -435,7 +435,7 @@ export class DynamodbEntityConnector {
     } while (
       lastEvaluatedKey != null &&
       (limit == undefined || items.length < limit)
-    );
+      );
 
     return items;
   }
@@ -604,7 +604,15 @@ export class DynamodbEntityConnector {
   }
 
   private buildClient(): DynamoDBClient {
-    return new DynamoDBClient(this.buildConfig());
+    const config = this.buildConfig();
+    return new DynamoDBClient({
+      region: config.region,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+        sessionToken: config.sessionToken,
+      },
+    });
   }
 
   private buildConfig() {
