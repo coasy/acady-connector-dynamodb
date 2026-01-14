@@ -611,15 +611,17 @@ export class DynamodbEntityConnector {
     if (this.config) return this.config;
 
     this.config = {};
-    if (process.env.AWS_ACCESS_KEY_ID) {
+
+    if (process.env.COASY_AWS_ACCESS_KEY_ID && process.env.COASY_AWS_SECRET_ACCESS_KEY) {
+      this.config.accessKeyId = process.env.COASY_AWS_ACCESS_KEY_ID;
+      this.config.secretAccessKey = process.env.COASY_AWS_SECRET_ACCESS_KEY;
+    } else if (process.env.AWS_ACCESS_KEY_ID) {
       this.config.accessKeyId = process.env.AWS_ACCESS_KEY_ID;
       this.config.secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+      if (process.env.AWS_SESSION_TOKEN) this.config.sessionToken = process.env.AWS_SESSION_TOKEN;
     }
 
     if (process.env.AWS_REGION) this.config.region = process.env.AWS_REGION;
-
-    if (process.env.AWS_SESSION_TOKEN)
-      this.config.sessionToken = process.env.AWS_SESSION_TOKEN;
 
     return this.config;
   }
